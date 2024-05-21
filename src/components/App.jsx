@@ -1,51 +1,89 @@
 import { useEffect, useState } from "react";
-import ContactList from "./ContactList/ContactList";
-import SearchBox from "./SearchBox/SearchBox";
-import ContactForm from "./ContactForm/ContactForm";
-import { nanoid } from "nanoid";
+import SearchBar from "./SearchBar/SearchBar";
+import fetchData from "../service/api";
 
-const data = [
-  { id: "id-1", name: "Rosie Simpson", number: "459-12-56" },
-  { id: "id-2", name: "Hermione Kline", number: "443-89-12" },
-  { id: "id-3", name: "Eden Clements", number: "645-17-79" },
-  { id: "id-4", name: "Annie Copeland", number: "227-91-26" },
-];
+import ImageGallery from "./ImageGallery/ImageGallery";
+import Loader from "./Loader/Loader";
+import ErrorMessage from "./ErrorMessage/ErrorMessage";
+import LoadMoreBtn from "./LoadMoreBtn/LoadMoreBtn";
+import ImageModal from "./ImageModal/ImageModal";
 
 const App = () => {
-  const [startData, setStartData] = useState(
-    () => JSON.parse(window.localStorage.getItem("save")) || data
-  );
+  const [value, setValue] = useState("");
+  const [photos, setPhotos] = useState([]);
+  const [page, setPage] = useState(1);
+  const [error, setError] = useState(false);
+
+  const [loading, setLoading] = useState(false);
+  const [loadMore, setLoadMore] = useState(false);
+  const [isModal, setIsModal] = useState(false);
+  const [big, setBig] = useState("");
+  const [total, setTotal] = useState("");
+
   useEffect(() => {
-    window.localStorage.setItem("save", JSON.stringify(startData));
-  }, [startData]);
+    if (!value) {
+      return;
+    }
+    const getData = async () => {
+      try {
+        setLoading(true);
+        setError(false);
 
-  const [filtered, setFiltered] = useState("");
+        const {
+          data: { results, total_pages },
+        } = await fetchData(value, page);
+        if (results.length) {
+          setPhotos((prev) => [...prev, ...results]);
+          setTotal(total_pages);
+          setLoadMore(true);
+        } else {
+          setError(true);
+        }
+      } catch (error) {
+        setError(error.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+    getData();
+  }, [page, value]);
 
-  const handleInpute = () => {
-    return startData.filter((item) =>
-      item.name.toLowerCase().includes(filtered.trim().toLowerCase())
-    );
+
+  const handleChangePage = () => {
+    setPage((prev) => prev + 1);
   };
-  const newData = handleInpute();
-  const handleSubmit = (values, actions) => {
-    actions.resetForm();
-    const formValues = { ...values, id: nanoid() };
 
-    setStartData([...startData, formValues]);
+  const handleSearch = (query) => {
+    setValue(query);
+    setPhotos([]);
+    setPage(1);
   };
 
-  const handleDelete = (id) => {
-    setStartData(startData.filter((item) => item.id !== id));
+  const onCloseModal = () => {
+    setIsModal(false);
   };
-
+  const onOpenModal = () => {
+    setIsModal(true);
+  };
+  const handleImageClick = (item) => {
+    setBig(item.urls.regular);
+    onOpenModal();
+  };
   return (
     <div>
-      <h1>Phonebook</h1>
-      <ContactForm handleSubmit={handleSubmit} />
-      <SearchBox setFiltered={setFiltered} />
-      <ContactList contacts={newData} handleDelete={handleDelete} />
+      <SearchBar onSubmit={handleSearch} />
+      {error && <ErrorMessage />}
+      {photos.length > 0 && (
+        <ImageGallery items={photos} setBig={setBig} onBig={handleImageClick} />
+      )}
+      {photos.length > 0 && page < total && (
+        <LoadMoreBtn onClick={() => handleChangePage()} />
+      )}
+      {loading && <Loader />}
+      {isModal && (
+        <ImageModal big={big} onClose={onCloseModal} onOpen={onOpenModal} />
+      )}
     </div>
   );
 };
-
 export default App;
